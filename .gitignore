@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+.env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project specific - Output folders (these contain extracted data)
+indications/
+contraindications/
+warnings/
+adverse_events/
+drug_interactions/
+liver/
+kidney/
+pharmacokinetics_summaries/
+metabolism/
+elimination/
+pharmacodynamics_summaries/
+pregnancy_summaries/
+breastfeeding_summaries/
+
+# Excel output files
+*.xlsx
+*.xls
+
+# API Keys and sensitive config
+config.py
+!config.py.example
+
+# Logs
+*.log
+logs/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS files
+Thumbs.db
+.DS_Store
