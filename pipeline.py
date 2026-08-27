@@ -211,13 +211,12 @@ def save_results(folder_dataset: List[Dict], folder_name: str) -> None:
     print(f"  ✅ Breastfeeding information extracted: {breastfeeding_success}/{len(folder_dataset)}")
     print(f"{'='*80}")
 
-def run_pipeline(target_folder: str, extract_all: bool = True) -> None:
+def run_pipeline(target_folder: str) -> None:
     """
     Run the complete extraction pipeline.
     
     Args:
         target_folder: Path to folder containing PDF files
-        extract_all: If True, extract everything. If False, extract only metadata.
     """
     # Get PDF files
     files = get_pdf_files(target_folder)
@@ -226,11 +225,8 @@ def run_pipeline(target_folder: str, extract_all: bool = True) -> None:
     
     folder_name = os.path.basename(target_folder)
     print(f"📂 Processing Folder: {folder_name} ({len(files)} files)")
-    if extract_all:
-        print(f"🔧 Extracting: Metadata + Indications + Serious Warnings + Adverse Events + Drug Interactions")
-    else:
-        print(f"🔧 Extracting: Metadata only")
-    print(f"{'='*80}\n")
+    print(f"🔧 Extracting: All features")
+
     
     folder_dataset = []
     

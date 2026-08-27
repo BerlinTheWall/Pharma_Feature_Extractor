@@ -11,7 +11,7 @@ from pharma_extractor_package.pipeline import run_pipeline
 
 if __name__ == "__main__":
     # IMPORTANT: Change this to your PDF folder path!
-    target_folder = "../Received Monographs/Product monograph/ACE Inhibitor - Copy/Cilazapril"
+    target_folder = "../../Received Monographs/Product monograph/ACE Inhibitor/Cilazapril"
     
     # Run the pipeline
     run_pipeline(target_folder)

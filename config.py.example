@@ -4,9 +4,14 @@ import os
 from openai import OpenAI
 
 # API Configuration
-API_BASE_URL = "https://api.cerebras.ai/v1"
+# Cloudflare Workers AI free tier (OpenAI-compatible, hosts
+# @cf/meta/llama-3.1-8b-instruct-fp8) -- get a free API token at
+# https://dash.cloudflare.com/profile/api-tokens (needs Workers AI permission)
+# and your account ID from the dashboard sidebar.
+API_BASE_URL = "https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID_HERE/ai/v1"
 # IMPORTANT: Replace with your actual API key
 API_KEY = "YOUR_API_KEY_HERE"
+DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8"
 
 # Processing Configuration
 SAFE_DELAY = 1
