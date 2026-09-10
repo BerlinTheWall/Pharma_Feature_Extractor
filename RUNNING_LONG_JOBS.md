@@ -88,9 +88,16 @@ Desktop, not Sign out.
 
 ## 5. Watch it from anywhere
 
+The launcher sends every line of extraction output to the log, so **the window
+you started it from stays blank until the run finishes**. That is expected — it
+is not a hang. The launcher opens a second window that follows the log for you;
+set `NOMONITOR=1` first if you don't want it. `-Encoding UTF8` matters: without
+it Windows PowerShell reads the UTF-8 log as ANSI and the progress emoji come
+out as mojibake.
+
 ```bat
 :: progress
-powershell -c "Get-Content output\run_*.log -Tail 30 -Wait"
+powershell -c "Get-Content output\run_*.log -Tail 30 -Wait -Encoding UTF8"
 
 :: how many PDFs are done
 powershell -c "(Get-Content 'output\Product monograph_checkpoint.jsonl').Count"

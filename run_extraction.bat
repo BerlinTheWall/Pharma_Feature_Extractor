@@ -61,6 +61,20 @@ echo Output folder : %OUTPUT_DIR%
 echo Log file      : !LOG!
 echo Model         : %PHARMA_EXTRACTOR_MODEL% @ %PHARMA_EXTRACTOR_BASE_URL%
 echo.
+echo All extraction output goes to the log file, so THIS WINDOW STAYS QUIET
+echo until the run finishes. That is normal - it is not stuck. The first PDF
+echo takes a few minutes, and no checkpoint file exists until it completes.
+echo.
+echo To watch progress, in another PowerShell window:
+echo     Get-Content "!LOG!" -Tail 40 -Wait -Encoding UTF8
+echo.
+
+REM Open that monitor window automatically. Set NOMONITOR=1 to suppress it,
+REM e.g. when running headless or as a scheduled task.
+if /i not "%NOMONITOR%"=="1" (
+    start "Extraction progress" powershell -NoProfile -Command "Get-Content '!LOG!' -Tail 40 -Wait -Encoding UTF8"
+)
+echo.
 
 REM --- Keep the machine awake for the whole run ----------------------
 powercfg /change standby-timeout-ac 0 >nul 2>&1
