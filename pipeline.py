@@ -5,7 +5,14 @@ import time
 import pandas as pd
 from typing import List, Dict
 
-from .config import SAFE_DELAY, OUTPUT_COLUMN_ORDER
+from .config import SAFE_DELAY, OUTPUT_COLUMN_ORDER, EXCEL_FLUSH_EVERY
+from .checkpoint import (
+    append_record,
+    completed_keys,
+    failed_keys,
+    load_records,
+    rewrite_records,
+)
 from .metadata_extractor import extract_metadata
 from .adverse_events_extractor import extract_adverse_events
 from .drug_interactions_extractor import extract_drug_interactions_from_pdf
@@ -22,18 +29,45 @@ from .breastfeeding_extractor import extract_breastfeeding_from_pdf
 from .contraindications_extractor import extract_contraindications_from_pdf
 
 
-def get_pdf_files(target_folder: str) -> List[str]:
-    """Get list of PDF files in target folder."""
+def get_pdf_files(target_folder: str, recursive: bool = True) -> List[Dict]:
+    """
+    Find the PDFs to process.
+
+    The corpus is nested as <class>/<generic>/*.pdf, so a full run walks the
+    tree rather than a single directory. Each entry carries a `key` -- the path
+    relative to target_folder -- which identifies the file in the checkpoint.
+    A bare filename would not: the same filename recurs under different
+    therapeutic classes.
+
+    Returns:
+        List of {"path", "key", "filename"} dicts, sorted so a resumed run
+        walks the corpus in the same order as the original.
+    """
     if not os.path.isdir(target_folder):
         print(f"❌ Folder path not found: {target_folder}")
         return []
-    
-    all_files = [f for f in os.listdir(target_folder) if f.endswith(".pdf")]
-    
-    if not all_files:
+
+    entries = []
+    if recursive:
+        for dirpath, _dirnames, filenames in os.walk(target_folder):
+            for filename in filenames:
+                if filename.lower().endswith(".pdf"):
+                    full_path = os.path.join(dirpath, filename)
+                    key = os.path.relpath(full_path, target_folder).replace(os.sep, "/")
+                    entries.append({"path": full_path, "key": key, "filename": filename})
+    else:
+        for filename in os.listdir(target_folder):
+            if filename.lower().endswith(".pdf"):
+                entries.append({
+                    "path": os.path.join(target_folder, filename),
+                    "key": filename,
+                    "filename": filename,
+                })
+
+    if not entries:
         print(f"⚠️ No PDF files found in: {target_folder}")
-    
-    return all_files
+
+    return sorted(entries, key=lambda e: e["key"])
 
 def process_single_file(file_path: str, filename: str, idx: int, total: int) -> Dict:
     """
@@ -149,100 +183,165 @@ def process_single_file(file_path: str, filename: str, idx: int, total: int) -> 
     
     return file_data
 
-def save_results(folder_dataset: List[Dict], folder_name: str) -> None:
-    """Save extracted data to Excel file."""
-    if not folder_dataset:
+def write_excel(records: List[Dict], output_path: str) -> None:
+    """Write the current records to Excel, replacing any previous version."""
+    if not records:
+        return
+
+    df = pd.DataFrame(records)
+
+    # Keep the documented column order, then append the provenance columns a
+    # recursive run needs -- ID alone doesn't say which class/generic folder a
+    # monograph came from.
+    available_columns = [col for col in OUTPUT_COLUMN_ORDER if col in df.columns]
+    trailing = [c for c in ("Source Path", "Drug Folder", "Therapeutic Class") if c in df.columns]
+    df = df[available_columns + trailing]
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    # Write to a temp file first: a crash mid-write would otherwise leave a
+    # corrupt spreadsheet where the last good one used to be.
+    tmp_path = output_path + ".tmp.xlsx"
+    df.to_excel(tmp_path, index=False)
+    os.replace(tmp_path, output_path)
+
+
+def print_summary(records: List[Dict], output_path: str) -> None:
+    """Print per-field extraction counts for the run so far."""
+    if not records:
         print(f"\n⚠️ No data to save")
         return
-    
-    df = pd.DataFrame(folder_dataset)
-    
-    # Only keep columns that exist in the dataframe
-    available_columns = [col for col in OUTPUT_COLUMN_ORDER if col in df.columns]
-    df = df[available_columns]
-    
-    output_filename = f"{folder_name}_complete_extraction.xlsx"
-    df.to_excel(output_filename, index=False)
-    
-    # Print summary
-    metadata_success = sum(1 for d in folder_dataset if not str(d.get("Brand Name", "")).startswith("ERROR"))
-    indications_success = sum(1 for d in folder_dataset if d.get("Indications", "") not in 
-                             ["ERROR", "NO_TEXT_FOUND", "EXTRACTION_FAILED", "******"])
-    contraindications_success = sum(1 for d in folder_dataset if d.get("Contraindications", "") not in 
-                                ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED"])
-    warnings_success = sum(1 for d in folder_dataset if d.get("Serious Warnings", "") not in 
-                          ["ERROR", "NO_TEXT_FOUND", "EXTRACTION_FAILED", "******"])
-    adverse_success = sum(1 for d in folder_dataset if d.get("Adverse Events", "") not in 
-                         ["ERROR", "NO_TEXT_FOUND", "CONTENT_EXTRACTION_FAILED", "EXTRACTION_FAILED"])
-    interactions_success = sum(1 for d in folder_dataset if d.get("Drug Interactions", "") not in
-                              ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED", "******"])
-    liver_success = sum(1 for d in folder_dataset if d.get("Liver Dose Adjustment", "") not in 
-                    ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED"])
-    kidney_success = sum(1 for d in folder_dataset if d.get("Kidney Dose Adjustment", "") not in 
-                     ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED"])
-    pk_success = sum(1 for d in folder_dataset if d.get("Pharmacokinetics Summary", "") not in 
-                 ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED", "SUMMARY_GENERATION_FAILED"])
-    metabolism_success = sum(1 for d in folder_dataset if d.get("Metabolism", "") not in 
-                         ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED"])
-    elimination_success = sum(1 for d in folder_dataset if d.get("Elimination", "") not in 
-                         ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED"])
-    pd_success = sum(1 for d in folder_dataset if d.get("Pharmacodynamics", "") not in 
-                 ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED", "SUMMARY_GENERATION_FAILED"])
-    pregnancy_success = sum(1 for d in folder_dataset if d.get("Pregnancy Recommendation", "") not in 
-                        ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED"])
-    breastfeeding_success = sum(1 for d in folder_dataset if d.get("Breastfeeding Recommendation", "") not in 
-                        ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED"])
 
-    print(f"\n{'='*80}")
-    print(f"💾 Saved {len(folder_dataset)} records to {output_filename}")
+    total = len(records)
+
+    def ok(field, sentinels):
+        return sum(1 for d in records if d.get(field, "") not in sentinels)
+
+    MISSING = ["ERROR", "NO_TEXT_FOUND", "SECTION_NOT_FOUND", "EXTRACTION_FAILED"]
+    SUMMARY_MISSING = MISSING + ["SUMMARY_GENERATION_FAILED"]
+
+    metadata_success = sum(1 for d in records if not str(d.get("Brand Name", "")).startswith("ERROR"))
+
+    print(f"\n{'=' * 80}")
+    print(f"💾 Saved {total} records to {output_path}")
     print(f"\n📊 SUMMARY:")
-    print(f"  ✅ Metadata extracted: {metadata_success}/{len(folder_dataset)}")
-    print(f"  ✅ Indications extracted: {indications_success}/{len(folder_dataset)}")
-    print(f"  ✅ Contraindications extracted: {contraindications_success}/{len(folder_dataset)}")
-    print(f"  ✅ Serious warnings extracted: {warnings_success}/{len(folder_dataset)}")
-    print(f"  ✅ Adverse events extracted: {adverse_success}/{len(folder_dataset)}")
-    print(f"  ✅ Drug interactions extracted: {interactions_success}/{len(folder_dataset)}")
-    print(f"  ✅ Liver dose adjustment extracted: {liver_success}/{len(folder_dataset)}")
-    print(f"  ✅ Kidney dose adjustment extracted: {kidney_success}/{len(folder_dataset)}")
-    print(f"  ✅ Pharmacokinetics summary extracted: {pk_success}/{len(folder_dataset)}")
-    print(f"  ✅ Metabolism (CYP enzymes): {metabolism_success}/{len(folder_dataset)}")
-    print(f"  ✅ Elimination (urine/faeces): {elimination_success}/{len(folder_dataset)}")
-    print(f"  ✅ Pharmacodynamics summary extracted: {pd_success}/{len(folder_dataset)}")
-    print(f"  ✅ Breastfeeding information extracted: {breastfeeding_success}/{len(folder_dataset)}")
-    print(f"{'='*80}")
+    print(f"  ✅ Metadata extracted: {metadata_success}/{total}")
+    print(f"  ✅ Indications extracted: {ok('Indications', ['ERROR', 'NO_TEXT_FOUND', 'EXTRACTION_FAILED', '******'])}/{total}")
+    print(f"  ✅ Contraindications extracted: {ok('Contraindications', MISSING)}/{total}")
+    print(f"  ✅ Serious warnings extracted: {ok('Serious Warnings', ['ERROR', 'NO_TEXT_FOUND', 'EXTRACTION_FAILED', '******'])}/{total}")
+    print(f"  ✅ Adverse events extracted: {ok('Adverse Events', ['ERROR', 'NO_TEXT_FOUND', 'CONTENT_EXTRACTION_FAILED', 'EXTRACTION_FAILED'])}/{total}")
+    print(f"  ✅ Drug interactions extracted: {ok('Drug Interactions', MISSING + ['******'])}/{total}")
+    print(f"  ✅ Liver dose adjustment extracted: {ok('Liver Dose Adjustment', MISSING)}/{total}")
+    print(f"  ✅ Kidney dose adjustment extracted: {ok('Kidney Dose Adjustment', MISSING)}/{total}")
+    print(f"  ✅ Pharmacokinetics summary extracted: {ok('Pharmacokinetics', SUMMARY_MISSING)}/{total}")
+    print(f"  ✅ Metabolism (CYP enzymes): {ok('Metabolism', MISSING)}/{total}")
+    print(f"  ✅ Elimination (urine/faeces): {ok('Elimination', MISSING)}/{total}")
+    print(f"  ✅ Pharmacodynamics summary extracted: {ok('Pharmacodynamics', SUMMARY_MISSING)}/{total}")
+    print(f"  ✅ Pregnancy information extracted: {ok('Pregnancy Recommendation', MISSING)}/{total}")
+    print(f"  ✅ Breastfeeding information extracted: {ok('Breastfeeding Recommendation', MISSING)}/{total}")
+    print(f"{'=' * 80}")
 
-def run_pipeline(target_folder: str) -> None:
+
+def save_results(folder_dataset: List[Dict], folder_name: str, output_dir: str = ".") -> str:
+    """Write the Excel output and print the run summary. Returns the path."""
+    output_path = os.path.join(output_dir, f"{folder_name}_complete_extraction.xlsx")
+    write_excel(folder_dataset, output_path)
+    print_summary(folder_dataset, output_path)
+    return output_path
+
+
+def _provenance(entry: Dict) -> Dict:
+    """Class and generic folder names recovered from the file's path."""
+    parts = entry["key"].split("/")
+    return {
+        "Source Path": entry["key"],
+        "Drug Folder": parts[-2] if len(parts) >= 2 else "",
+        "Therapeutic Class": parts[-3] if len(parts) >= 3 else "",
+    }
+
+
+def run_pipeline(
+    target_folder: str,
+    output_dir: str = ".",
+    recursive: bool = True,
+    resume: bool = True,
+    retry_failed: bool = False,
+    limit: int = None,
+) -> None:
     """
     Run the complete extraction pipeline.
-    
-    Args:
-        target_folder: Path to folder containing PDF files
-    """
-    # Get PDF files
-    files = get_pdf_files(target_folder)
-    if not files:
-        return
-    
-    folder_name = os.path.basename(target_folder)
-    print(f"📂 Processing Folder: {folder_name} ({len(files)} files)")
-    print(f"🔧 Extracting: All features")
 
-    
-    folder_dataset = []
-    
-    # Process each file
-    for idx, filename in enumerate(files, 1):
-        file_path = os.path.join(target_folder, filename)
+    Every finished record is appended to a JSONL checkpoint before the next PDF
+    starts, so an interrupted multi-day run resumes where it stopped instead of
+    losing everything. The Excel is rebuilt from that checkpoint periodically
+    and at the end.
+
+    Args:
+        target_folder: Root folder containing monograph PDFs
+        output_dir: Where the Excel and checkpoint are written
+        recursive: Walk subfolders (the corpus is class/generic nested)
+        resume: Skip PDFs already present in the checkpoint
+        retry_failed: Also re-process checkpointed records that errored out
+        limit: Stop after this many newly processed files (for a smoke test)
+    """
+    entries = get_pdf_files(target_folder, recursive=recursive)
+    if not entries:
+        return
+
+    folder_name = os.path.basename(os.path.normpath(target_folder))
+    os.makedirs(output_dir, exist_ok=True)
+    checkpoint_path = os.path.join(output_dir, f"{folder_name}_checkpoint.jsonl")
+    output_path = os.path.join(output_dir, f"{folder_name}_complete_extraction.xlsx")
+
+    records = load_records(checkpoint_path) if resume else []
+    done = completed_keys(records)
+
+    if retry_failed and records:
+        retryable = failed_keys(records)
+        if retryable:
+            records = [r for r in records if r.get("Source Path") not in retryable]
+            rewrite_records(checkpoint_path, records)
+            done -= retryable
+            print(f"♻️ Retrying {len(retryable)} previously failed file(s)")
+
+    pending = [e for e in entries if e["key"] not in done]
+    if limit is not None:
+        pending = pending[:limit]
+
+    print(f"📂 Processing: {target_folder}")
+    print(f"🔧 Extracting: All features")
+    print(f"📄 {len(entries)} PDF(s) found | {len(done)} already done | {len(pending)} to process")
+    print(f"🧷 Checkpoint: {checkpoint_path}")
+
+    if not pending:
+        print("✅ Nothing left to process.")
+        if records:
+            write_excel(records, output_path)
+            print_summary(records, output_path)
+        return
+
+    run_started = time.time()
+
+    for idx, entry in enumerate(pending, 1):
         start_time = time.time()
-        
-        # Process file
-        file_data = process_single_file(file_path, filename, idx, len(files))
-        folder_dataset.append(file_data)
-        
+
+        file_data = process_single_file(entry["path"], entry["filename"], idx, len(pending))
+        file_data.update(_provenance(entry))
+
+        # Checkpoint before anything else gets a chance to fail.
+        append_record(checkpoint_path, file_data)
+        records.append(file_data)
+
+        if idx % EXCEL_FLUSH_EVERY == 0:
+            write_excel(records, output_path)
+
+        avg = (time.time() - run_started) / idx
+        remaining = avg * (len(pending) - idx)
+        print(f"  ⏱️ {idx}/{len(pending)} done | avg {avg:.1f}s/file | ~{remaining / 3600:.1f}h remaining")
+
         # Rate limiting
         elapsed = time.time() - start_time
         if elapsed < SAFE_DELAY:
             time.sleep(SAFE_DELAY - elapsed)
-    
-    # Save results
-    save_results(folder_dataset, folder_name)
+
+    write_excel(records, output_path)
+    print_summary(records, output_path)

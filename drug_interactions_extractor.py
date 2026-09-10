@@ -5,6 +5,7 @@ import time
 import re
 import pandas as pd
 from .config import SAFE_DELAY
+from .notify import beep
 from .pdf_utils import extract_pdf_text
 from .api_client import call_ai_api
 from .prompts import DRUG_INTERACTIONS_EXTRACTION_PROMPT, DRUG_INTERACTIONS_SYSTEM_MESSAGE
@@ -574,8 +575,7 @@ if __name__ == "__main__":
     process_drug_interactions_folder(test_folder)
     
     try:
-        import winsound
-        winsound.Beep(440, 500)
+        beep()
     except:
         pass
     

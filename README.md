@@ -136,12 +136,16 @@ A larger annotated evaluation set is the clearest next step.
 ## Repository layout
 
 ```
-pipeline.py           orchestration
-run.py                entry point
+run.py                entry point (CLI)
+pipeline.py           orchestration, resume and checkpointing
+checkpoint.py         crash-safe JSONL record store
 api_client.py         LLM API layer
 pdf_utils.py          PyPDF2 text extraction
 prompts.py            field-specific prompts
-config.py.example     configuration template — copy to config.py
+config.py             configuration, all env-overridable
+notify.py             completion beep, no-op where unsupported
+run_extraction.bat    supervised unattended launcher (Windows)
+RUNNING_LONG_JOBS.md  procedure for a full-corpus run on another machine
 ```
 
 ## Running it
@@ -150,9 +154,34 @@ config.py.example     configuration template — copy to config.py
 git clone https://github.com/BerlinTheWall/Pharma_Feature_Extractor.git
 cd Pharma_Feature_Extractor
 pip install -r requirements.txt
-cp config.py.example config.py     # add your API credentials
-python run.py
+
+# Default backend is a local Ollama server -- no API key, nothing leaves the machine
+ollama pull mistral
+
+python run.py "path/to/Product monograph" --limit 2   # smoke test
+python run.py "path/to/Product monograph"             # full run
 ```
+
+The target folder is walked recursively, so one invocation covers the whole
+`<class>/<generic>/*.pdf` corpus. Output and a resume checkpoint go to
+`output/`.
+
+To use a hosted OpenAI-compatible provider instead, set the endpoint in the
+environment rather than editing any file:
+
+```bash
+PHARMA_EXTRACTOR_BASE_URL=... PHARMA_EXTRACTOR_API_KEY=... \
+PHARMA_EXTRACTOR_MODEL=... python run.py "path/to/Product monograph"
+```
+
+### Long runs
+
+A full-corpus pass is ~20,000 model calls and takes days. Every finished PDF is
+checkpointed to JSONL before the next begins, so an interrupted run resumes
+rather than restarting — rerun the same command and it skips what is done.
+
+For an unattended run on a dedicated machine, including the supervised
+auto-restart launcher, see **[RUNNING_LONG_JOBS.md](RUNNING_LONG_JOBS.md)**.
 
 ## Data
 

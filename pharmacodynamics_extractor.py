@@ -4,7 +4,7 @@ import os
 import time
 import re
 import pandas as pd
-import winsound
+from .notify import beep
 from .config import client, SAFE_DELAY, PD_OUTPUT_FOLDER
 from .pdf_utils import extract_pdf_text
 from .api_client import call_ai_api
@@ -324,7 +324,7 @@ if __name__ == "__main__":
     process_pharmacodynamics_folder(test_folder)
     
     try:
-        winsound.Beep(440, 500)
+        beep()
     except:
         pass
     
