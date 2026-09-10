@@ -58,10 +58,22 @@ confirm the fields look sane.
 
 ```bat
 cd C:\pharma\pharma_extractor_package
-run_extraction.bat "C:\pharma\Product monograph"
+.\run_extraction.bat "C:\pharma\Product monograph"
 ```
 
-`run_extraction.bat` does the things an unattended run needs:
+> **Keep the `.\` prefix.** PowerShell refuses to run a program from the
+> current directory without it and reports `is not recognized` even though the
+> file is sitting right there. `.\run_extraction.bat` works in both PowerShell
+> and cmd.exe.
+
+Anything after the target folder is passed through to `run.py`, so the resume
+workflows work through the launcher too:
+
+```bat
+.\run_extraction.bat "C:\pharma\Product monograph" --retry-failed
+```
+
+`.\run_extraction.bat` does the things an unattended run needs:
 
 - walks all `<class>\<generic>\*.pdf` subfolders in one pass
 - forces UTF-8 so the emoji progress output doesn't crash on redirect
@@ -103,7 +115,7 @@ what is done, and prints `N already done | M to process`.
 
 | Situation | Command |
 |---|---|
-| Resume after any stop | `run_extraction.bat "C:\pharma\Product monograph"` |
+| Resume after any stop | `.\run_extraction.bat "C:\pharma\Product monograph"` |
 | Reprocess files that errored | `python run.py "..." -o output --retry-failed` |
 | Start completely fresh | delete `output\*_checkpoint.jsonl`, or pass `--no-resume` |
 
@@ -148,9 +160,9 @@ One model call at a time, ~14 calls per PDF. To speed the run up:
 
   ```bat
   :: machine A
-  run_extraction.bat "C:\pharma\Product monograph\ACE Inhibitor"
+  .\run_extraction.bat "C:\pharma\Product monograph\ACE Inhibitor"
   :: machine B
-  run_extraction.bat "C:\pharma\Product monograph\Calcium channel blocker"
+  .\run_extraction.bat "C:\pharma\Product monograph\Calcium channel blocker"
   ```
 
   Merge the per-folder spreadsheets afterwards; the `Source Path`,
@@ -169,6 +181,7 @@ One model call at a time, ~14 calls per PDF. To speed the run up:
 | `UnicodeEncodeError` on `📄` | Ran `python run.py` redirected without the .bat | `set PYTHONIOENCODING=utf-8` |
 | Excel rewrite fails mid-run | You have the .xlsx open | Close it; the checkpoint is unaffected |
 | Machine slept overnight | Power settings not applied | Run the .bat as Administrator |
+| `run_extraction.bat` `is not recognized` | PowerShell won't run from the current dir | Use `.\run_extraction.bat` |
 | Long sections extract poorly | 4096-token context truncation | `setx OLLAMA_CONTEXT_LENGTH 16384`, restart Ollama |
 
 ---

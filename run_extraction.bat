@@ -18,7 +18,19 @@ if "%~1"=="" (
     set "TARGET=..\..\Received Monographs\Product monograph"
 ) else (
     set "TARGET=%~1"
+    shift
 )
+
+REM Anything after the target is handed straight to run.py, so the resume
+REM workflows work through the launcher too, e.g.:
+REM   run_extraction.bat "C:\pharma\Product monograph" --retry-failed
+set "EXTRA_ARGS="
+:collect_args
+if "%~1"=="" goto args_done
+set "EXTRA_ARGS=!EXTRA_ARGS! %1"
+shift
+goto collect_args
+:args_done
 set "OUTPUT_DIR=%~dp0output"
 set "MAX_RESTARTS=100"
 set "RESTART_WAIT=60"
@@ -36,8 +48,12 @@ REM No hosted rate limit to respect when the model is local.
 set "PHARMA_EXTRACTOR_SAFE_DELAY=0"
 
 if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set "DT=%%I"
-set "STAMP=!DT:~0,8!_!DT:~8,6!"
+REM wmic was removed in recent Windows 11 builds, so ask PowerShell for the
+REM timestamp instead -- and fall back to a fixed name if even that fails, so
+REM a bad log name can never stop the run.
+set "STAMP="
+for /f %%I in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss" 2^>nul') do set "STAMP=%%I"
+if not defined STAMP set "STAMP=current"
 set "LOG=%OUTPUT_DIR%\run_!STAMP!.log"
 
 echo Target folder : %TARGET%
@@ -57,7 +73,7 @@ set /a attempt=0
 :runloop
 set /a attempt+=1
 echo [%date% %time%] === attempt !attempt! of %MAX_RESTARTS% === >> "!LOG!"
-python run.py "%TARGET%" -o "%OUTPUT_DIR%" >> "!LOG!" 2>&1
+python run.py "%TARGET%" -o "%OUTPUT_DIR%"!EXTRA_ARGS! >> "!LOG!" 2>&1
 set "EXITCODE=!errorlevel!"
 
 if "!EXITCODE!"=="0" goto done
