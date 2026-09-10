@@ -36,6 +36,21 @@ DEFAULT_TEMPERATURE = 0.1
 # spreadsheet is if you look at it mid-run.
 EXCEL_FLUSH_EVERY = int(os.environ.get("PHARMA_EXTRACTOR_EXCEL_FLUSH_EVERY", "10"))
 
+# Largest slice of monograph text sent to the model in one call.
+#
+# This has to fit inside the model's context window alongside the prompt and
+# the answer, and overflow is NOT an error: the server silently drops the
+# excess, so the model answers from a fragment of the document and starts
+# summarising whatever it can see. That is what produced prose in the
+# comma-separated list fields.
+#
+# Ollama's default context is 4096 tokens (~16k characters), which this 6000
+# leaves comfortable room inside. Raise BOTH together -- e.g. set
+# OLLAMA_CONTEXT_LENGTH=16384 and PHARMA_EXTRACTOR_MAX_SECTION_CHARS=20000 --
+# to feed the model more of each section and recover the recall a small window
+# costs you.
+MAX_SECTION_CHARS = int(os.environ.get("PHARMA_EXTRACTOR_MAX_SECTION_CHARS", "6000"))
+
 # Page Extraction Settings
 METADATA_PAGES = [0]  # Page 1 for metadata
 WARNINGS_PAGES = [3, 5]  # Pages 4 and 6 for warnings (0-indexed)

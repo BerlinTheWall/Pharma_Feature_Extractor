@@ -41,8 +41,11 @@ RULES:
 - Remove duplicates if the same event appears multiple times
 - If no events found, return "NO_ADVERSE_EVENTS_FOUND"
 
-Example of correct output:
-dizziness, headache, cough, fatigue, hypotension, syncope, rash, nausea, diarrhea, angioedema, hyperkalemia
+Output shape (placeholders, never output these words):
+<event name>, <event name>, <event name>
+
+Every event you list MUST appear in the text below. Never invent a plausible
+list of adverse events.
 
 Text to analyze:
 {adverse_section}
@@ -54,8 +57,8 @@ You are a clinical pharmacist analyzing drug interaction information.
 
 TASK: Extract ALL drug names mentioned in the Drug Interactions section below.
 
-FORMAT YOUR OUTPUT EXACTLY LIKE THIS EXAMPLE:
-Warfarin, Phenytoin, Aspirin, Ibuprofen, Naproxen, Paracetamol, Tolbutamide, Piroxicam, Cyclosporin, Digoxin, Lithium, Methotrexate, Mifepristone
+FORMAT (shape only -- these are placeholders, never output these words):
+<drug name>, <drug name>, <drug class>, <drug name>
 
 INSTRUCTIONS:
 - Identify every drug, medication, or therapeutic class mentioned in the text
@@ -68,6 +71,8 @@ INSTRUCTIONS:
 - Remove duplicates - each drug/drug class should appear only once
 - Format as a comma-separated list with a space after each comma
 - If no drugs are mentioned, return "******"
+- Every drug you list MUST appear verbatim in the text below. Never invent a
+  plausible list, and never copy the placeholder names from the format line.
 - Do NOT include any explanations, bullet points, numbers, or additional text
 - Do NOT include the word "and" - use commas only
 - Do NOT include dosage information, just the drug names/classes
@@ -94,6 +99,16 @@ INSTRUCTIONS:
    - Format as a single, clean, comma-separated list.
    - Do not include introductory text like 'indicated for' or patient ages.
 7. If no clear indications are found, return '******'.
+
+CORRECT output shape (placeholders, never output these words):
+<condition>, <condition>, <condition>
+
+WRONG output (never do this):
+"It appears you've provided a description of the drug. Here's a summary: 1. Dosage..."
+Anything containing a sentence, an introduction, a numbered list, or a closing
+remark is wrong, even if the medical content is correct. If the text below does
+not actually contain an indications section, return '******' rather than
+describing what the text does contain.
 
 Text:
 {indications_text}
@@ -314,6 +329,16 @@ STRICT RULES:
 5. FALLBACK: If the section is not found or empty, return "********".
 6. No sentences, no extra words, just the conditions or diseases.
 
+CORRECT output shape (placeholders, never output these words):
+<condition>, <patient group>, <condition>
+
+WRONG output (never do this):
+"The text you provided is a summary of the contraindications associated with..."
+Anything containing a sentence, an introduction, a numbered list, or a closing
+remark is wrong, even if the medical content is correct. Do not wrap the list in
+quotation marks. If the text below does not actually contain a contraindications
+section, return "********" rather than describing what the text does contain.
+
 Text:
 {contraindications_text}
 """
@@ -322,8 +347,8 @@ Text:
 # System messages for AI
 METADATA_SYSTEM_MESSAGE = "You are a data extraction tool. Output only raw data strings."
 ADVERSE_EVENTS_SYSTEM_MESSAGE = "You output ONLY comma-separated lists. No other text."
-DRUG_INTERACTIONS_SYSTEM_MESSAGE = "You output ONLY a comma-separated list of drug names. No other text. Example format: Warfarin, Phenytoin, Aspirin, Ibuprofen, Naproxen"
-INDICATIONS_SYSTEM_MESSAGE = "You are a data extraction tool. Output only raw data strings with comma-separated conditions."
+DRUG_INTERACTIONS_SYSTEM_MESSAGE = "You output ONLY a comma-separated list of drug names taken verbatim from the supplied text. No other text. Never invent drugs and never repeat placeholder names from the prompt."
+INDICATIONS_SYSTEM_MESSAGE = "You output ONLY a comma-separated list of conditions taken from the supplied text. No other text. Never write a summary, a sentence or an introduction, and never invent conditions."
 WARNINGS_SYSTEM_MESSAGE = "You are a data extraction tool. Output only raw data strings."
 LIVER_SYSTEM_MESSAGE = "You output ONLY one of the four specified options. No other text."
 KIDNEY_SYSTEM_MESSAGE = "You output ONLY one of the four specified options. No other text."
@@ -332,6 +357,6 @@ ELIMINATION_SYSTEM_MESSAGE = "You only output two lines: Urine elimination: and 
 PD_SYSTEM_MESSAGE = "You output a single comprehensive paragraph summarizing pharmacodynamic data. No bullet points, no section headers, just a flowing paragraph."
 PREGNANCY_SYSTEM_MESSAGE = "You are a clinical pharmacist. Provide short, factual summaries of drug safety information."
 BREASTFEEDING_SYSTEM_MESSAGE = "You are a clinical pharmacist. Provide short, factual summaries of drug safety information for breastfeeding."
-CONTRAINDICATIONS_SYSTEM_MESSAGE = "You are a data extraction tool. Output only raw data strings."
+CONTRAINDICATIONS_SYSTEM_MESSAGE = "You output ONLY a comma-separated list of conditions or patient groups taken from the supplied text. No other text. Never write a summary, a sentence or an introduction, and never invent conditions."
 
 

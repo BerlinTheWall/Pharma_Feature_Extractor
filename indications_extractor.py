@@ -323,9 +323,9 @@ import time
 import re
 import pandas as pd
 from .notify import beep
-from .config import client, SAFE_DELAY, INDICATIONS_OUTPUT_FOLDER
+from .config import client, SAFE_DELAY, INDICATIONS_OUTPUT_FOLDER, MAX_SECTION_CHARS
 from .pdf_utils import extract_pdf_text
-from .api_client import call_ai_api
+from .api_client import call_ai_api, call_ai_api_keywords
 from .prompts import INDICATIONS_EXTRACTION_PROMPT, INDICATIONS_SYSTEM_MESSAGE
 
 def create_flexible_pattern(text):
@@ -554,8 +554,13 @@ def extract_indications_from_pdf(pdf_path: str, filename: str) -> str:
             return "EXTRACTION_FAILED"
         
         # Use AI to extract clean indications
-        prompt = INDICATIONS_EXTRACTION_PROMPT.format(indications_text=indications_section[:15000])
-        result = call_ai_api(prompt, INDICATIONS_SYSTEM_MESSAGE, filename, temperature=0.1)
+        prompt = INDICATIONS_EXTRACTION_PROMPT.format(
+            indications_text=indications_section[:MAX_SECTION_CHARS]
+        )
+        result = call_ai_api_keywords(
+            prompt, INDICATIONS_SYSTEM_MESSAGE, filename, "Indications",
+            source_text=indications_section[:MAX_SECTION_CHARS], temperature=0.1
+        )
         
         if result and result != "********":
             print(f"    ✅ Extracted indications: {result[:100]}..." if len(result) > 100 else f"    ✅ Extracted indications: {result}")

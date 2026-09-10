@@ -3,11 +3,12 @@
 import re
 from typing import Tuple, Optional
 from .config import (
+    MAX_SECTION_CHARS,
     TOC_SEARCH_PAGES, DEFAULT_ADVERSE_START_PAGE, 
     DEFAULT_ADVERSE_END_PAGE_OFFSET
 )
 from .pdf_utils import extract_pdf_text
-from .api_client import call_ai_api
+from .api_client import call_ai_api, call_ai_api_keywords
 from .prompts import ADVERSE_EVENTS_EXTRACTION_PROMPT, ADVERSE_EVENTS_SYSTEM_MESSAGE
 
 # Regex patterns for finding sections in TOC
@@ -158,8 +159,13 @@ def extract_adverse_events(pdf_path: str, filename: str) -> str:
         return "CONTENT_EXTRACTION_FAILED"
     
     # Extract event names using AI
-    prompt = ADVERSE_EVENTS_EXTRACTION_PROMPT.format(adverse_section=adverse_section)
-    result = call_ai_api(prompt, ADVERSE_EVENTS_SYSTEM_MESSAGE, filename, temperature=0.1)
+    prompt = ADVERSE_EVENTS_EXTRACTION_PROMPT.format(
+        adverse_section=adverse_section[:MAX_SECTION_CHARS]
+    )
+    result = call_ai_api_keywords(
+        prompt, ADVERSE_EVENTS_SYSTEM_MESSAGE, filename, "Adverse Events",
+        source_text=adverse_section[:MAX_SECTION_CHARS], temperature=0.1
+    )
     
     if result:
         # Clean up the result

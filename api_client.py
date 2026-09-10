@@ -2,6 +2,7 @@
 
 import time
 from .config import client, DEFAULT_MODEL
+from .output_format import normalize_keyword_list
 
 def call_ai_api(prompt: str, system_message: str, filename: str, temperature: float = 0.1, model: str = None, max_retries: int = 5):
     """
@@ -52,3 +53,79 @@ def call_ai_api(prompt: str, system_message: str, filename: str, temperature: fl
                 return "EXTRACTION_FAILED"
             print(f"Error: {e}. Retrying {filename} in 5s... (attempt {attempts}/{max_retries})")
             time.sleep(5)
+
+# Appended to the prompt when the model's first answer was not a clean list.
+_FORMAT_CORRECTION = """
+
+Your previous answer was rejected because it {reason}.
+
+Return ONLY the terms, separated by commas, on a single line.
+Do not write a summary, a sentence, an introduction or a closing remark.
+Do not number the terms and do not use bullet points.
+Correct shape: term one, term two, term three
+"""
+
+
+def call_ai_api_keywords(
+    prompt: str,
+    system_message: str,
+    filename: str,
+    field_name: str,
+    source_text: str = None,
+    temperature: float = 0.1,
+    model: str = None,
+    max_retries: int = 5,
+    max_format_attempts: int = 3,
+):
+    """
+    Call the model for a field whose value must be a comma-separated list.
+
+    Small instruct models drift into prose no matter how firmly the prompt is
+    worded, and prose stored in a list column is indistinguishable from data
+    downstream. So the answer is validated: salvageable shapes (bullets,
+    numbering, a wrapping quote, a leading label) are normalized, and genuine
+    summaries are rejected and re-asked with a correction naming the problem.
+
+    Pass `source_text` to also reject answers whose terms do not appear in the
+    document -- the failure mode where the model returns a clean, plausible
+    list it invented, or copied from an example in the prompt.
+
+    Returns:
+        The normalized comma-separated string, a passthrough sentinel, or
+        "EXTRACTION_FAILED" if the model never produced a usable list. Prose is
+        never returned -- an explicit failure is recoverable, silent bad data
+        is not.
+    """
+    attempt_prompt = prompt
+    attempt_temperature = temperature
+
+    for attempt in range(1, max_format_attempts + 1):
+        raw = call_ai_api(
+            attempt_prompt,
+            system_message,
+            filename,
+            temperature=attempt_temperature,
+            model=model,
+            max_retries=max_retries,
+        )
+
+        if raw == "EXTRACTION_FAILED":
+            return "EXTRACTION_FAILED"
+
+        value, reason = normalize_keyword_list(raw, source_text=source_text)
+        if value is not None:
+            if attempt > 1:
+                print(f"    ✅ {field_name}: valid list on format attempt {attempt}")
+            return value
+
+        preview = " ".join(str(raw).split())[:120]
+        print(f"    ⚠️ {field_name}: rejected non-list answer ({reason}) on attempt "
+              f"{attempt}/{max_format_attempts}: {preview}...")
+
+        attempt_prompt = prompt + _FORMAT_CORRECTION.format(reason=reason)
+        # Drop to greedy decoding for the corrective attempts.
+        attempt_temperature = 0.0
+
+    print(f"    ❌ {field_name}: no valid list after {max_format_attempts} attempts "
+          f"-- recording EXTRACTION_FAILED rather than storing prose")
+    return "EXTRACTION_FAILED"

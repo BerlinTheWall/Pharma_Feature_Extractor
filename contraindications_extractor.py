@@ -5,9 +5,9 @@ import time
 import re
 import pandas as pd
 from .notify import beep
-from .config import SAFE_DELAY, CONTRAINDICATIONS_OUTPUT_FOLDER
+from .config import SAFE_DELAY, CONTRAINDICATIONS_OUTPUT_FOLDER, MAX_SECTION_CHARS
 from .pdf_utils import extract_pdf_text
-from .api_client import call_ai_api
+from .api_client import call_ai_api, call_ai_api_keywords
 from .prompts import CONTRAINDICATIONS_EXTRACTION_PROMPT, CONTRAINDICATIONS_SYSTEM_MESSAGE
 
 def create_flexible_pattern(text):
@@ -234,8 +234,13 @@ def extract_contraindications_from_pdf(pdf_path: str, filename: str) -> str:
             return "EXTRACTION_FAILED"
         
         # Use AI to extract clean contraindications
-        prompt = CONTRAINDICATIONS_EXTRACTION_PROMPT.format(contraindications_text=contraindications_section[:15000])
-        result = call_ai_api(prompt, CONTRAINDICATIONS_SYSTEM_MESSAGE, filename, temperature=0.1)
+        prompt = CONTRAINDICATIONS_EXTRACTION_PROMPT.format(
+            contraindications_text=contraindications_section[:MAX_SECTION_CHARS]
+        )
+        result = call_ai_api_keywords(
+            prompt, CONTRAINDICATIONS_SYSTEM_MESSAGE, filename, "Contraindications",
+            source_text=contraindications_section[:MAX_SECTION_CHARS], temperature=0.1
+        )
         
         if result and result != "********":
             print(f"    ✅ Extracted contraindications: {result[:100]}..." if len(result) > 100 else f"    ✅ Extracted contraindications: {result}")

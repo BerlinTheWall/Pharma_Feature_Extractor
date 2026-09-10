@@ -4,10 +4,10 @@ import os
 import time
 import re
 import pandas as pd
-from .config import SAFE_DELAY
+from .config import SAFE_DELAY, MAX_SECTION_CHARS
 from .notify import beep
 from .pdf_utils import extract_pdf_text
-from .api_client import call_ai_api
+from .api_client import call_ai_api, call_ai_api_keywords
 from .prompts import DRUG_INTERACTIONS_EXTRACTION_PROMPT, DRUG_INTERACTIONS_SYSTEM_MESSAGE
 
 # Configuration
@@ -401,8 +401,13 @@ def extract_drug_names(interactions_section_text, filename):
     """
     print(f"    📤 Sending {len(interactions_section_text)} characters to API for drug name extraction")
     
-    prompt = DRUG_INTERACTIONS_EXTRACTION_PROMPT.format(interactions_section_text=interactions_section_text)
-    result = call_ai_api(prompt, DRUG_INTERACTIONS_SYSTEM_MESSAGE, filename, temperature=0.1)
+    prompt = DRUG_INTERACTIONS_EXTRACTION_PROMPT.format(
+        interactions_section_text=interactions_section_text[:MAX_SECTION_CHARS]
+    )
+    result = call_ai_api_keywords(
+        prompt, DRUG_INTERACTIONS_SYSTEM_MESSAGE, filename, "Drug Interactions",
+        source_text=interactions_section_text[:MAX_SECTION_CHARS], temperature=0.1
+    )
     
     if result:
         # Clean up the response

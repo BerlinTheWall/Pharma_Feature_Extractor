@@ -156,7 +156,50 @@ This is worth pinning down for the thesis regardless: if the published
 accuracy numbers were produced at 4096 tokens, some of the reported weakness on
 long-section fields may be truncation rather than model capability.
 
-## 8. Throughput
+## 8. List fields and the context window
+
+Indications, contraindications, adverse events and drug interactions must be
+comma-separated keywords and nothing else. Two things used to break that:
+
+**Oversized input.** Sections were sent to the model at up to 15,000 characters
+(adverse events and drug interactions were not capped at all), against a
+4096-token window. Overflow is not an error — the server silently drops the
+excess, so the model sees a fragment and starts summarising it. That is where
+the prose in those columns came from. Input is now capped by
+`PHARMA_EXTRACTOR_MAX_SECTION_CHARS` (default 6000).
+
+**No output check.** Whatever the model returned went into the spreadsheet.
+Answers are now validated: bullets, numbering, wrapping quotes and a leading
+label are normalised into a clean list, while genuine summaries are rejected and
+re-asked up to three times with a correction. If the model never produces a
+list, the cell records `EXTRACTION_FAILED` — an explicit failure you can find
+and re-run, instead of prose that looks like data.
+
+Raise the two limits together to feed the model more of each section:
+
+```bat
+setx OLLAMA_CONTEXT_LENGTH 16384
+setx PHARMA_EXTRACTOR_MAX_SECTION_CHARS 20000
+```
+
+**Invented lists.** The worst failure was not prose but a clean list that was
+never in the document. The drug-interactions prompt used to end with a concrete
+example, and the model sometimes returned that example verbatim — thirteen real
+drug names, perfectly formatted, entirely unrelated to the monograph. Format
+checks cannot catch that, because the shape is correct.
+
+Two defences: every prompt example is now a placeholder (`<drug name>`) that
+cannot be copied as content, and each returned term is checked against the
+source text. If fewer than half the terms appear in the document the answer is
+rejected as invented and re-asked.
+
+Watch the log for `rejected non-list answer`. A few is normal. Many on one
+field means the section finder is feeding that field the wrong text, which is a
+retrieval problem, not a formatting one. A rejection reading `terms appear in
+the source text` means the model invented an answer — usually the sign that the
+section it was given was empty or irrelevant.
+
+## 9. Throughput
 
 One model call at a time, ~14 calls per PDF. To speed the run up:
 
@@ -178,7 +221,7 @@ One model call at a time, ~14 calls per PDF. To speed the run up:
   note the README's finding that Qwen under-catches clinically important
   adverse events.
 
-## 9. If it goes wrong
+## 10. If it goes wrong
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -189,6 +232,7 @@ One model call at a time, ~14 calls per PDF. To speed the run up:
 | Excel rewrite fails mid-run | You have the .xlsx open | Close it; the checkpoint is unaffected |
 | Machine slept overnight | Power settings not applied | Run the .bat as Administrator |
 | `run_extraction.bat` `is not recognized` | PowerShell won't run from the current dir | Use `.\run_extraction.bat` |
+| Prose in a keyword column | Section text overflowed the context | Raise both context and MAX_SECTION_CHARS |
 | Long sections extract poorly | 4096-token context truncation | `setx OLLAMA_CONTEXT_LENGTH 16384`, restart Ollama |
 
 ---
@@ -204,3 +248,4 @@ All optional; the .bat sets the ones that matter.
 | `PHARMA_EXTRACTOR_MODEL` | `mistral` | Model name |
 | `PHARMA_EXTRACTOR_SAFE_DELAY` | `1` | Seconds between files; `0` for local |
 | `PHARMA_EXTRACTOR_EXCEL_FLUSH_EVERY` | `10` | Files between Excel rewrites |
+| `PHARMA_EXTRACTOR_MAX_SECTION_CHARS` | `6000` | Max characters of a section sent per call |
