@@ -1,44 +1,48 @@
-"""Configuration settings for the extractor - COPY THIS TO config.py AND ADD YOUR API KEY."""
+"""Configuration settings for the extractor.
+
+COPY THIS FILE TO config.py before running:
+    copy config.py.example config.py     (Windows)
+    cp   config.py.example config.py     (Linux/macOS)
+
+config.py is gitignored so machine-specific settings and any hosted-provider
+credentials never reach the repository. The defaults below need no credentials
+at all: they talk to a local Ollama server.
+"""
 
 import os
+
 from openai import OpenAI
 
-# API Configuration
-# Cloudflare Workers AI free tier (OpenAI-compatible, hosts
-# @cf/meta/llama-3.1-8b-instruct-fp8) -- get a free API token at
-# https://dash.cloudflare.com/profile/api-tokens (needs Workers AI permission)
-# and your account ID from the dashboard sidebar.
-API_BASE_URL = "https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID_HERE/ai/v1"
-# IMPORTANT: Replace with your actual API key
-API_KEY = "YOUR_API_KEY_HERE"
-DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8"
+# API Configuration -- overridable per-run so a model-comparison sweep or a
+# switch of provider doesn't require editing this file, e.g.:
+#   set PHARMA_EXTRACTOR_MODEL=qwen2.5:7b && python run.py ...
+#
+# The default is a local Ollama server: no per-token cost, no rate limits, and
+# no regulatory PDFs leaving the machine -- which is what a multi-day full-corpus
+# run needs. Ollama ignores the API key, so the placeholder below is not a
+# secret. To use a hosted OpenAI-compatible provider instead, set all three env
+# vars; never hard-code a live token here, since this tree is published.
+API_BASE_URL = os.environ.get("PHARMA_EXTRACTOR_BASE_URL", "http://localhost:11434/v1")
+API_KEY = os.environ.get("PHARMA_EXTRACTOR_API_KEY", "ollama")
+DEFAULT_MODEL = os.environ.get("PHARMA_EXTRACTOR_MODEL", "mistral")
+
 
 # Processing Configuration
-SAFE_DELAY = 1
+SAFE_DELAY = float(os.environ.get("PHARMA_EXTRACTOR_SAFE_DELAY", "1"))  # Seconds between API calls to avoid rate limits (0 is fine for local Ollama)
 DEFAULT_TEMPERATURE = 0.1
 
-# Page Extraction Settings
-METADATA_PAGES = [0]
-INDICATIONS_PAGES = [1, 3]
-WARNINGS_PAGES = [3, 5]
-TOC_SEARCH_PAGES = 3
-DEFAULT_ADVERSE_START_PAGE = 9
-DEFAULT_ADVERSE_END_PAGE_OFFSET = 5
+# How often the in-progress Excel is rewritten from the checkpoint. Every
+# record is checkpointed to JSONL regardless; this only controls how fresh the
+# spreadsheet is if you look at it mid-run.
+EXCEL_FLUSH_EVERY = int(os.environ.get("PHARMA_EXTRACTOR_EXCEL_FLUSH_EVERY", "10"))
 
-# Output folder names
-INDICATIONS_OUTPUT_FOLDER = "indications"
-CONTRAINDICATIONS_OUTPUT_FOLDER = "contraindications"
-WARNINGS_OUTPUT_FOLDER = "warnings"
-ADVERSE_EVENTS_OUTPUT_FOLDER = "adverse_events"
-DRUG_INTERACTIONS_OUTPUT_FOLDER = "drug_interactions"
-LIVER_OUTPUT_FOLDER = "liver"
-KIDNEY_OUTPUT_FOLDER = "kidney"
-PK_OUTPUT_FOLDER = "pharmacokinetics_summaries"
-METABOLISM_OUTPUT_FOLDER = "metabolism"
-ELIMINATION_OUTPUT_FOLDER = "elimination"
-PD_OUTPUT_FOLDER = "pharmacodynamics_summaries"
-PREGNANCY_OUTPUT_FOLDER = "pregnancy_summaries"
-BREASTFEEDING_OUTPUT_FOLDER = "breastfeeding_summaries"
+# Page Extraction Settings
+METADATA_PAGES = [0]  # Page 1 for metadata
+WARNINGS_PAGES = [3, 5]  # Pages 4 and 6 for warnings (0-indexed)
+INDICATIONS_PAGES = [1, 3]  # Pages 2 and 4 for indications (0-indexed)
+TOC_SEARCH_PAGES = 3  # First 3 pages for TOC
+DEFAULT_ADVERSE_START_PAGE = 9
+DEFAULT_ADVERSE_END_PAGE_OFFSET = 5  # Start + 5 pages if next section not found
 
 # Output Settings
 OUTPUT_COLUMN_ORDER = [
@@ -56,7 +60,7 @@ OUTPUT_COLUMN_ORDER = [
     "Drug Interactions",
     "Liver Dose Adjustment",
     "Kidney Dose Adjustment",
-    "Pharmacokinetics Summary",
+    "Pharmacokinetics",
     "Metabolism",
     "Elimination",
     "Pharmacodynamics",
@@ -66,8 +70,26 @@ OUTPUT_COLUMN_ORDER = [
     "Breastfeeding Summary"
 ]
 
-# Initialize OpenAI client (will be replaced with actual key)
+INDICATIONS_OUTPUT_FOLDER = "indications"
+CONTRAINDICATIONS_OUTPUT_FOLDER = "contraindications"
+WARNINGS_OUTPUT_FOLDER = "warnings"
+ADVERSE_EVENTS_OUTPUT_FOLDER = "adverse_events"
+DRUG_INTERACTIONS_OUTPUT_FOLDER = "drug_interactions"
+LIVER_OUTPUT_FOLDER = "liver"
+KIDNEY_OUTPUT_FOLDER = "kidney"
+PK_OUTPUT_FOLDER = "pharmacokinetics_summaries"
+METABOLISM_OUTPUT_FOLDER = "metabolism"
+ELIMINATION_OUTPUT_FOLDER = "elimination"
+PD_OUTPUT_FOLDER = "pharmacodynamics_summaries"
+PREGNANCY_OUTPUT_FOLDER = "pregnancy_summaries"
+BREASTFEEDING_OUTPUT_FOLDER = "breastfeeding_summaries"
+
+# Initialize OpenAI client. timeout + max_retries=0 so a stuck request fails
+# fast instead of hanging indefinitely -- api_client.py's own retry loop
+# handles retrying, so the SDK's built-in retries would just double up.
 client = OpenAI(
     base_url=API_BASE_URL,
-    api_key=API_KEY
+    api_key=API_KEY,
+    timeout=240,
+    max_retries=0,
 )

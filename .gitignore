@@ -55,6 +55,11 @@ breastfeeding_summaries/
 *.xlsx
 *.xls
 
+# Long-run outputs: results and resume checkpoints stay local
+output/
+*.jsonl
+
+
 # API Keys and sensitive config
 config.py
 !config.py.example
