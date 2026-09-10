@@ -14,8 +14,27 @@ for stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-# Add parent directory to path if running directly
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# The extractor modules use relative imports, so they have to be imported as a
+# package. But a clone is named after the repository -- Pharma_Feature_Extractor,
+# or Pharma_Feature_Extractor-main from a downloaded zip -- not after the
+# package, and the old "add the parent directory to sys.path" trick only worked
+# when the containing folder happened to be called pharma_extractor_package.
+# Bind whatever directory this file lives in to the canonical package name
+# instead, so `python run.py` works from a checkout of any name.
+_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+_PKG_NAME = "pharma_extractor_package"
+
+if _PKG_NAME not in sys.modules:
+    import importlib.util
+
+    _spec = importlib.util.spec_from_file_location(
+        _PKG_NAME,
+        os.path.join(_PKG_DIR, "__init__.py"),
+        submodule_search_locations=[_PKG_DIR],
+    )
+    _package = importlib.util.module_from_spec(_spec)
+    sys.modules[_PKG_NAME] = _package
+    _spec.loader.exec_module(_package)
 
 from pharma_extractor_package.config import API_BASE_URL, DEFAULT_MODEL, client
 from pharma_extractor_package.notify import beep
