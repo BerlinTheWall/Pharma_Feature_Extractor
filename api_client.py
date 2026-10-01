@@ -4,7 +4,7 @@ import time
 from .config import client, DEFAULT_MODEL, KEYWORD_MAX_TOKENS, KEYWORD_REQUEST_TIMEOUT
 from .output_format import normalize_keyword_list
 
-def call_ai_api(prompt: str, system_message: str, filename: str, temperature: float = 0.1, model: str = None, max_retries: int = 5, max_tokens: int = None, return_finish_reason: bool = False, timeout: float = None):
+def call_ai_api(prompt: str, system_message: str, filename: str, temperature: float = 0.1, model: str = None, max_retries: int = 2, max_tokens: int = None, return_finish_reason: bool = False, timeout: float = None):
     """
     Generic AI API call with retry logic.
 
@@ -20,8 +20,9 @@ def call_ai_api(prompt: str, system_message: str, filename: str, temperature: fl
             fields, where an unbounded answer means a runaway generation that
             can burn the full client timeout.
         max_retries: give up and return "EXTRACTION_FAILED" after this many
-            consecutive non-rate-limit failures (e.g. a request that keeps
-            timing out), instead of retrying forever
+            consecutive non-rate-limit, non-timeout failures. Kept small: if a
+            request fails twice, replaying it a third time rarely helps and
+            costs a long run real time.
 
     Returns:
         API response content as string, or "EXTRACTION_FAILED" if max_retries
@@ -32,7 +33,10 @@ def call_ai_api(prompt: str, system_message: str, filename: str, temperature: fl
     rate_limit_attempts = 0
     timeout_attempts = 0
     max_timeout_retries = 2
-    max_rate_limit_retries = max_retries * 3  # rate limits are expected to clear; give them more slack than real errors
+    # Rate limits are expected to clear on their own, so they keep a generous
+    # budget of their own rather than being derived from the error budget --
+    # a short error budget shouldn't also mean giving up quickly on a 429.
+    max_rate_limit_retries = 15
     while True:
         try:
             response = client.chat.completions.create(
@@ -96,7 +100,7 @@ def call_ai_api_keywords(
     source_text: str = None,
     temperature: float = 0.1,
     model: str = None,
-    max_retries: int = 5,
+    max_retries: int = 2,
     max_format_attempts: int = 3,
     max_tokens: int = None,
 ):
