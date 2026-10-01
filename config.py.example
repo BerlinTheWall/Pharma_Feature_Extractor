@@ -51,6 +51,21 @@ EXCEL_FLUSH_EVERY = int(os.environ.get("PHARMA_EXTRACTOR_EXCEL_FLUSH_EVERY", "10
 # costs you.
 MAX_SECTION_CHARS = int(os.environ.get("PHARMA_EXTRACTOR_MAX_SECTION_CHARS", "6000"))
 
+# Hard ceiling on the answer length for the comma-separated list fields.
+#
+# Without a cap the model generates until it decides to stop, and the answers
+# that go wrong are exactly the long ones -- a rambling summary can run for
+# minutes and sometimes until the 240s client timeout, which then gets retried.
+# A list of adverse events is the longest legitimate answer here and fits in a
+# few hundred tokens, so capping costs nothing and stops the runaway case.
+KEYWORD_MAX_TOKENS = int(os.environ.get("PHARMA_EXTRACTOR_KEYWORD_MAX_TOKENS", "700"))
+
+# Per-request timeout for the list fields. Their answers are capped by
+# KEYWORD_MAX_TOKENS, so a healthy call finishes in well under a minute and a
+# call still running after this is pathological -- failing fast beats spending
+# the global 240s on it, three times over.
+KEYWORD_REQUEST_TIMEOUT = float(os.environ.get("PHARMA_EXTRACTOR_KEYWORD_TIMEOUT", "150"))
+
 # Page Extraction Settings
 METADATA_PAGES = [0]  # Page 1 for metadata
 WARNINGS_PAGES = [3, 5]  # Pages 4 and 6 for warnings (0-indexed)
