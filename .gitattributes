@@ -1,0 +1,3 @@
+# The frozen code of the paper's final version is checked by SHA-256
+# (paper/v3/FROZEN.txt), so its bytes must not be changed on checkout.
+paper/v3/* -text

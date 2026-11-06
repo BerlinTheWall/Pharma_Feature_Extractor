@@ -1,0 +1,3 @@
+FROM mistral:latest
+PARAMETER num_ctx 32768
+PARAMETER num_predict 2048

@@ -195,3 +195,12 @@ Source documents are public Health Canada regulatory filings.
   - what the "v2 pipeline" changed
   - absolute recall for adverse events and contraindications, not just the gap
 -->
+
+## Code of the paper
+
+The scripts behind the paper's results, including the final version of the
+pipeline, are in [`paper/`](paper/README.md).
+
+## License
+
+The code is released under the [MIT License](LICENSE).
