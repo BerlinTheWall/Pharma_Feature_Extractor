@@ -23,6 +23,7 @@ The paper compares two versions of the pipeline:
 | `heldout/runs/modelfiles/` | Ollama settings of the local runs (context of 32,768 tokens, answer limit of 2,048 tokens) |
 | `results_ci/` | Scoring against the gold standard (`score_against_ground_truth.py`), confidence intervals and paired comparisons (`compute_ci.py`, `compute_ci_rerun.py`), and the error analysis (`error_analysis.py`) |
 | `table1/` | Description of the corpus (Table 1) and the check of the PDF bookmarks |
+| `release/` | Building the released dataset: check of the DIN and Health Canada links (`check_links.py`, `verify_pdf_links.py`, `decide_links.py`, result in `link_verdicts.csv`), the cleaned table (`build_release.py`) and its description (`DATA_README.md`) |
 
 ## Running it
 
