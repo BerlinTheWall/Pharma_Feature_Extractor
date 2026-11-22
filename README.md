@@ -1,14 +1,13 @@
 # Pharma Feature Extractor
 
-Turning 1,435 Health Canada drug product monographs from PDFs into structured,
-queryable clinical data, using LLMs to read what regulatory documents actually
-say, rather than parsing them by rule.
+Turning Health Canada drug product monographs from PDFs into structured,
+queryable clinical data, using LLMs that run locally to read what regulatory
+documents actually say, rather than parsing them by rule.
 
 Monographs are the authoritative source for what a drug is indicated for, who
 must not take it, what it interacts with, and how dosing changes in liver or
-kidney impairment. That information is locked in prose across thousands of
-documents, in inconsistent formats, from dozens of manufacturers. This pipeline
-unlocks it.
+kidney impairment. That information is locked in prose across more than a
+thousand documents, in inconsistent formats, from dozens of manufacturers.
 
 > Part of MSc research at Western University. Two papers in preparation.
 
@@ -18,18 +17,23 @@ unlocks it.
 |---|---|
 | **Pharma_Feature_Extractor** *(this repo)* | **Extraction.** This pipeline |
 | [pharma_pattern_models](https://github.com/BerlinTheWall/pharma_pattern_models) | **Experiments.** Clustering, prediction and anomaly detection over the output |
-| [Pharma_Monograph_Visualization](https://github.com/BerlinTheWall/Pharma_Monograph_Visualization) | **The product.** Flask API and interactive D3.js explorer |
+| [Pharma_Monograph_Visualization](https://github.com/BerlinTheWall/Pharma_Monograph_Visualization) | **The interface.** Flask API and interactive D3.js explorer |
 
-## Scale
+## Corpus
 
 | | |
 |---|---|
-| Source monographs | 1,435 PDFs |
-| Structured records in the released dataset | 1,433 |
+| PDF files | 1,435, from Health Canada's Drug Product Database (January 2026) |
+| Distinct monographs | 1,434 (one monograph was filed under two drugs) |
+| Rows in the released dataset | 1,433 (one scanned monograph could not be read) |
 | Therapeutic classes | 19 |
 | Generic drugs | 53 |
 | Manufacturers | 62 |
-| Extracted field categories | 13 |
+| Fields per monograph | 23, from 14 extractors |
+
+Four other monographs are scanned PDFs with almost no text. They are in the
+dataset but marked, since most of their list fields did not come from the
+document.
 
 ## How it works
 
@@ -40,98 +44,91 @@ Monograph PDF
 PyPDF2 text extraction
      │
      ▼
-Keyword and section search  ──►  locate the region for each field
+Locate the section for each field
      │
      ▼
-Field-specific prompt  ──►  LLM
+Field-specific prompt  ──►  local LLM (Ollama)
      │                        │
      │              categorical fields → constrained to a fixed category set
-     │              list fields        → open-ended, comma-separated
+     │              list fields        → comma-separated list of short terms
      ▼
-Structured record (13 field categories)
+Structured record (23 fields)
 ```
 
 Each field gets its own prompt rather than one prompt for the whole document.
-Categorical fields (dose adjustment in hepatic impairment, pregnancy
-recommendation) are constrained to a fixed set of allowed outputs. Open-ended
-fields like adverse events and drug interactions are extracted as free lists.
+Categorical fields (dose adjustment in liver and kidney impairment, pregnancy
+and breastfeeding recommendation) are constrained to a fixed set of allowed
+answers. Lists such as adverse events and drug interactions are returned as
+short terms, and an answer that is prose instead of a list is rejected and
+asked again.
 
-### Models
+### Everything runs locally
 
-| Model | Inference |
+All models run on a local [Ollama](https://ollama.com) server. No monograph text
+is sent to a hosted API and no API key is needed.
+
+| Model | Used for |
 |---|---|
-| Llama 3.1-8B | Cerebras-hosted |
-| Mistral 7B | Local |
-| Qwen 2.5 7B | Local |
+| Llama 3.1 8B | Producing the released dataset; evaluation |
+| Mistral 7B | Evaluation; default model of this repository |
+| Qwen 2.5 7B | Evaluation |
+
+For the evaluation runs, each model was given a 32,768-token context and a
+2,048-token answer limit (`paper/heldout/runs/modelfiles/`).
+
+### Two versions of the pipeline
+
+- **Original pipeline:** the package at the root of this repository (tag
+  `paper-original`). It finds each field's section by keyword search, and it
+  produced the released dataset.
+- **Final version:** [`paper/v3/`](paper/v3/). It locates sections from the PDF
+  bookmarks and splits long sections before sending them to the model, for the
+  nine evaluated fields. Its code was frozen on November 6, 2026, before the
+  held-out evaluation, and `paper/v3/FROZEN.txt` holds the SHA-256 of each file.
 
 ## Evaluation
 
-Output was compared against a manually reviewed gold standard.
+Nine fields were evaluated against manually annotated gold standards:
 
-### Categorical field accuracy
+- **Categorical:** liver and kidney dose adjustment, pregnancy and
+  breastfeeding recommendation
+- **Lists:** indications, contraindications, serious warnings and precautions,
+  adverse events, drug interactions
 
-| Field | Llama 3.1-8B (Cerebras) | Mistral 7B | Qwen 2.5 7B |
-|---|---|---|---|
-| Liver dose adjustment | 40.0% | **45.0%** | 25.0% |
-| Kidney dose adjustment | **55.0%** | 45.0% | 40.0% |
-| Pregnancy recommendation | **30.0%** | 20.0% | **30.0%** |
-| Breastfeeding recommendation | 16.7% | **22.2%** | **22.2%** |
+Two sets of 20 monographs were annotated, each with one monograph per
+therapeutic class plus a second from the largest class:
 
-### Critical-item recall
+- a **development set**, used while building the final version;
+- a **held-out test set**, drawn at random with a fixed seed (20261005) after
+  excluding the development monographs, other strengths of the same products and
+  unreadable files.
 
-The gap between recall on a clinically important subset and recall overall.
-Positive means important items are caught *more* reliably than average.
-
-| System | Adverse events | Contraindications |
-|---|---|---|
-| Llama 3.1-8B (Cerebras) | +4.8pp | +9.5pp |
-| Mistral 7B | **+11.3pp** | +9.4pp |
-| Qwen 2.5 7B | −6.0pp | +7.3pp |
-| Qwen 2.5 7B (v2 pipeline) | **−10.7pp** | **+14.3pp** |
+List items are matched to the gold standard semantically, using PubMedBERT
+embeddings. Results are reported with 95% confidence intervals (bootstrap over
+monographs for lists, Wilson intervals for categorical accuracy), with paired
+comparisons of the two pipeline versions, and with recall on clinically
+critical items checked at three matching thresholds. The scripts are in
+[`paper/results_ci/`](paper/results_ci/).
 
 ## Findings
 
-**Categorical extraction is not yet reliable enough for clinical use.** Accuracy
-ranges from 16.7% to 55%. No configuration reaches what a regulatory application
-would require. This is the central result, and it is a useful one: it
-establishes that general-purpose 7 to 8B models with prompt-based extraction are not
-sufficient for this task without further work.
+The full results are in the paper (in preparation). In short:
 
-**No single model wins.** Llama leads on kidney dose adjustment, Mistral on liver
-dose and breastfeeding, pregnancy is a tie. Model choice is field-dependent,
-which argues for per-field selection rather than one model for the whole
-pipeline.
-
-**A local model matches a hosted one.** Mistral 7B, running locally at no
-per-token cost, performs comparably to Cerebras-hosted Llama 3.1-8B and has the
-best critical-item recall of anything tested. Where sending regulatory data to a
-third-party API is not acceptable, which is common in this domain, that
-matters more than a small accuracy difference.
-
-**Qwen under-catches clinically important adverse events.** Both variants score
-negative on adverse-event critical recall, −6.0pp and −10.7pp. The items that
-matter most clinically are the ones most likely to be missed. In a
-pharmacovigilance context that is a safety characteristic, not a performance
-detail.
-
-**Contraindication recall is reassuring.** Every system catches important
-contraindications more reliably than average. Where overall contraindication
-extraction drops, the loss falls on low-importance items rather than critical
-ones.
+- **The original pipeline misses part of the listed items.** Adverse events,
+  contraindications, drug interactions and indications all lose some of the
+  items listed in the monograph.
+- **Serious warnings had a low recall** in the original pipeline, because it read
+  them from two fixed pages of each monograph.
+- **The final version has a higher recall.** Locating sections from the PDF
+  bookmarks and splitting long sections are what changed.
 
 ## Limitations
 
-Accuracy is measured against a manually reviewed subset, not the full corpus.
-The subset is small, so individual percentages should be read as indicative;
-the direction of differences between models is more trustworthy than their exact
-size.
-
-Interpreting the numbers also requires the number of categories each field
-admits, which sets the chance baseline. On pregnancy and breastfeeding in
-particular, observed accuracies are close enough to plausible chance levels that
-the margin above random is not established by this evaluation alone.
-
-A larger annotated evaluation set is the clearest next step.
+- Each evaluation set has 20 monographs, so individual percentages carry wide
+  confidence intervals.
+- Only 9 of the 23 fields were evaluated.
+- The released dataset comes from the original pipeline, not the final version.
+- Scanned monographs give the pipeline almost no text to read.
 
 ## Repository layout
 
@@ -148,6 +145,7 @@ config.py.example     configuration template, all env-overridable (copy to confi
 notify.py             completion beep, no-op where unsupported
 run_extraction.bat    supervised unattended launcher (Windows)
 RUNNING_LONG_JOBS.md  procedure for a full-corpus run on another machine
+paper/                code behind the paper's results, including the final version
 ```
 
 ## Running it
@@ -158,7 +156,6 @@ cd Pharma_Feature_Extractor
 pip install -r requirements.txt
 cp config.py.example config.py   # Windows: copy config.py.example config.py
 
-# Default backend is a local Ollama server -- no API key, nothing leaves the machine
 ollama pull mistral
 
 python run.py "path/to/Product monograph" --limit 2   # smoke test
@@ -167,34 +164,27 @@ python run.py "path/to/Product monograph"             # full run
 
 The target folder is walked recursively, so one invocation covers the whole
 `<class>/<generic>/*.pdf` corpus. Output and a resume checkpoint go to
-`output/`.
-
-To use a hosted OpenAI-compatible provider instead, set the endpoint in the
-environment rather than editing any file:
-
-```bash
-PHARMA_EXTRACTOR_BASE_URL=... PHARMA_EXTRACTOR_API_KEY=... \
-PHARMA_EXTRACTOR_MODEL=... python run.py "path/to/Product monograph"
-```
+`output/`. To use another local model, set `PHARMA_EXTRACTOR_MODEL`, for example
+`PHARMA_EXTRACTOR_MODEL=llama3.1:8b`.
 
 ### Long runs
 
-A full-corpus pass is ~20,000 model calls and takes days. Every finished PDF is
-checkpointed to JSONL before the next begins, so an interrupted run resumes
-rather than restarting: rerun the same command and it skips what is done.
+A full-corpus pass is about 20,000 model calls (14 per PDF) and takes days.
+Every finished PDF is checkpointed to JSONL before the next begins, so an
+interrupted run resumes rather than restarting: rerun the same command and it
+skips what is done.
 
 For an unattended run on a dedicated machine, including the supervised
 auto-restart launcher, see **[RUNNING_LONG_JOBS.md](RUNNING_LONG_JOBS.md)**.
 
 ## Data
 
-Source documents are public Health Canada regulatory filings.
+The monographs are public Health Canada regulatory filings and are not included
+in this repository. The released dataset and its description are built by the
+scripts in [`paper/release/`](paper/release/DATA_README.md).
 
-
-## Code of the paper
-
-The scripts behind the paper's results, including the final version of the
-pipeline, are in [`paper/`](paper/README.md).
+The data was extracted automatically and contains errors. It is for research
+only and must not be used for clinical decisions.
 
 ## License
 

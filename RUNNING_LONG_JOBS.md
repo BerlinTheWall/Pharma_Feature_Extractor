@@ -217,9 +217,8 @@ One model call at a time, ~14 calls per PDF. To speed the run up:
 
   Merge the per-folder spreadsheets afterwards; the `Source Path`,
   `Drug Folder` and `Therapeutic Class` columns keep provenance.
-- **Try `qwen2.5:7b`** by changing `PHARMA_EXTRACTOR_MODEL` in the .bat, but
-  note the README's finding that Qwen under-catches clinically important
-  adverse events.
+- **Try another model**, such as `qwen2.5:7b` or `llama3.1:8b`, by changing
+  `PHARMA_EXTRACTOR_MODEL` in the .bat.
 
 ## 10. If it goes wrong
 
