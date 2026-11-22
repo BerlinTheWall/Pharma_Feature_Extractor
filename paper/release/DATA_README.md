@@ -14,7 +14,7 @@ The fields were extracted with the original version of the pipeline
 (https://github.com/BerlinTheWall/Pharma_Feature_Extractor, tag
 `paper-original`), using Llama 3.1 8B. The quality of nine of the fields was
 measured on 20 annotated monographs, and the results are in the paper
-[CITATION PENDING]. In short:
+(in preparation). In short:
 
 - the adverse events, contraindications, drug interactions and indications
   miss a part of the items listed in the monograph;
@@ -23,7 +23,7 @@ measured on 20 annotated monographs, and the results are in the paper
 - the 14 other fields were not evaluated.
 
 A newer version of the pipeline, described in the paper, has a higher recall,
-but it was not used for this dataset [UPDATE IF THE CORPUS IS RERUN].
+but it was not used for this dataset.
 
 ## Files
 

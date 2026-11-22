@@ -1,7 +1,7 @@
 # Pharma Feature Extractor
 
 Turning 1,435 Health Canada drug product monographs from PDFs into structured,
-queryable clinical data — using LLMs to read what regulatory documents actually
+queryable clinical data, using LLMs to read what regulatory documents actually
 say, rather than parsing them by rule.
 
 Monographs are the authoritative source for what a drug is indicated for, who
@@ -25,7 +25,7 @@ unlocks it.
 | | |
 |---|---|
 | Source monographs | 1,435 PDFs |
-| Structured records produced | ~1,434 |
+| Structured records in the released dataset | 1,433 |
 | Therapeutic classes | 19 |
 | Generic drugs | 53 |
 | Manufacturers | 62 |
@@ -52,8 +52,8 @@ Structured record (13 field categories)
 ```
 
 Each field gets its own prompt rather than one prompt for the whole document.
-Categorical fields — dose adjustment in hepatic impairment, pregnancy
-recommendation — are constrained to a fixed set of allowed outputs. Open-ended
+Categorical fields (dose adjustment in hepatic impairment, pregnancy
+recommendation) are constrained to a fixed set of allowed outputs. Open-ended
 fields like adverse events and drug interactions are extracted as free lists.
 
 ### Models
@@ -93,8 +93,8 @@ Positive means important items are caught *more* reliably than average.
 
 **Categorical extraction is not yet reliable enough for clinical use.** Accuracy
 ranges from 16.7% to 55%. No configuration reaches what a regulatory application
-would require. This is the central result, and it is a useful one — it
-establishes that general-purpose 7–8B models with prompt-based extraction are not
+would require. This is the central result, and it is a useful one: it
+establishes that general-purpose 7 to 8B models with prompt-based extraction are not
 sufficient for this task without further work.
 
 **No single model wins.** Llama leads on kidney dose adjustment, Mistral on liver
@@ -105,7 +105,7 @@ pipeline.
 **A local model matches a hosted one.** Mistral 7B, running locally at no
 per-token cost, performs comparably to Cerebras-hosted Llama 3.1-8B and has the
 best critical-item recall of anything tested. Where sending regulatory data to a
-third-party API is not acceptable — which is common in this domain — that
+third-party API is not acceptable, which is common in this domain, that
 matters more than a small accuracy difference.
 
 **Qwen under-catches clinically important adverse events.** Both variants score
@@ -122,7 +122,7 @@ ones.
 ## Limitations
 
 Accuracy is measured against a manually reviewed subset, not the full corpus.
-The subset is small, so individual percentages should be read as indicative —
+The subset is small, so individual percentages should be read as indicative;
 the direction of differences between models is more trustworthy than their exact
 size.
 
@@ -142,7 +142,9 @@ checkpoint.py         crash-safe JSONL record store
 api_client.py         LLM API layer
 pdf_utils.py          PyPDF2 text extraction
 prompts.py            field-specific prompts
-config.py             configuration, all env-overridable
+*_extractor.py        one extractor per field category
+output_format.py      builds the output spreadsheet
+config.py.example     configuration template, all env-overridable (copy to config.py)
 notify.py             completion beep, no-op where unsupported
 run_extraction.bat    supervised unattended launcher (Windows)
 RUNNING_LONG_JOBS.md  procedure for a full-corpus run on another machine
@@ -154,6 +156,7 @@ RUNNING_LONG_JOBS.md  procedure for a full-corpus run on another machine
 git clone https://github.com/BerlinTheWall/Pharma_Feature_Extractor.git
 cd Pharma_Feature_Extractor
 pip install -r requirements.txt
+cp config.py.example config.py   # Windows: copy config.py.example config.py
 
 # Default backend is a local Ollama server -- no API key, nothing leaves the machine
 ollama pull mistral
@@ -178,7 +181,7 @@ PHARMA_EXTRACTOR_MODEL=... python run.py "path/to/Product monograph"
 
 A full-corpus pass is ~20,000 model calls and takes days. Every finished PDF is
 checkpointed to JSONL before the next begins, so an interrupted run resumes
-rather than restarting — rerun the same command and it skips what is done.
+rather than restarting: rerun the same command and it skips what is done.
 
 For an unattended run on a dedicated machine, including the supervised
 auto-restart launcher, see **[RUNNING_LONG_JOBS.md](RUNNING_LONG_JOBS.md)**.
@@ -187,14 +190,6 @@ auto-restart launcher, see **[RUNNING_LONG_JOBS.md](RUNNING_LONG_JOBS.md)**.
 
 Source documents are public Health Canada regulatory filings.
 
-<!--
-  BEFORE PUBLISHING, add if you have them:
-  - number of categories per categorical field (sets the chance baseline)
-  - size of the gold-standard set and who labelled it
-  - whether accuracy is exact-match or semantic
-  - what the "v2 pipeline" changed
-  - absolute recall for adverse events and contraindications, not just the gap
--->
 
 ## Code of the paper
 

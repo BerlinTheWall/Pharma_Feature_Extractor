@@ -1,7 +1,7 @@
 """Pharma Monograph Extractor - Extract numerous features from pharmaceutical monographs."""
 
 __version__ = "1.0.0"
-__author__ = "Hooman katebpourshahidi"
+__author__ = "Hooman Katebpourshahidi"
 
 from .metadata_extractor import extract_metadata
 from .adverse_events_extractor import extract_adverse_events
