@@ -21,7 +21,7 @@ Copy two things to the new machine:
 
 Put them side by side; nothing else from the project tree is needed.
 
-There are **no credentials to copy** — the default configuration talks to a
+There are **no credentials to copy**: the default configuration talks to a
 local Ollama server, so nothing leaves the machine and no API key is involved.
 
 ## 2. Install
@@ -80,16 +80,16 @@ workflows work through the launcher too:
 - disables sleep, hibernate and disk timeout while it runs
 - logs to `output\run_<timestamp>.log`
 - **restarts the pipeline automatically** if it exits non-zero, waiting 60s
-  between attempts, up to 100 times — safe, because the restart resumes from
+  between attempts, up to 100 times. This is safe because the restart resumes from
   the checkpoint
 
-Leave the window open. Logging off will kill it — use **Disconnect** in Remote
+Leave the window open. Logging off will kill it, so use **Disconnect** in Remote
 Desktop, not Sign out.
 
 ## 5. Watch it from anywhere
 
 The launcher sends every line of extraction output to the log, so **the window
-you started it from stays blank until the run finishes**. That is expected — it
+you started it from stays blank until the run finishes**. That is expected; it
 is not a hang. The launcher opens a second window that follows the log for you;
 set `NOMONITOR=1` first if you don't want it. `-Encoding UTF8` matters: without
 it Windows PowerShell reads the UTF-8 log as ANSI and the progress emoji come
@@ -110,7 +110,7 @@ Each file logs a running average and an ETA:
 ```
 
 The `.xlsx` is rebuilt from the checkpoint every 10 files, so you can open it
-mid-run to inspect results (copy it first — Excel locks the file, and a locked
+mid-run to inspect results (copy it first: Excel locks the file, and a locked
 target will fail the next rewrite).
 
 ## 6. Stopping and resuming
@@ -126,11 +126,11 @@ what is done, and prints `N already done | M to process`.
 | Reprocess files that errored | `python run.py "..." -o output --retry-failed` |
 | Start completely fresh | delete `output\*_checkpoint.jsonl`, or pass `--no-resume` |
 
-## 7. Context length — check this before a long run
+## 7. Context length: check this before a long run
 
 Ollama defaults to a **4096-token context**. Several prompts in this pipeline
-send multi-page sections — the adverse-events extractor sends roughly five
-pages of text — which is comfortably over that limit. Ollama silently drops
+send multi-page sections (the adverse-events extractor sends roughly five
+pages of text), which is comfortably over that limit. Ollama silently drops
 the overflow rather than erroring, so the model answers from a truncated
 document and the run *looks* fine while quietly losing recall.
 
@@ -148,7 +148,7 @@ setx OLLAMA_CONTEXT_LENGTH 16384
 ```
 
 A larger context costs GPU memory. If `ollama ps` then shows the model partly
-on CPU (`17%/83% CPU/GPU`), you have traded speed for it — on a long run that
+on CPU (`17%/83% CPU/GPU`), you have traded speed for it. On a long run that
 trade is usually still worth it, but measure both with `--limit 2` before
 committing days.
 
@@ -163,7 +163,7 @@ comma-separated keywords and nothing else. Two things used to break that:
 
 **Oversized input.** Sections were sent to the model at up to 15,000 characters
 (adverse events and drug interactions were not capped at all), against a
-4096-token window. Overflow is not an error — the server silently drops the
+4096-token window. Overflow is not an error: the server silently drops the
 excess, so the model sees a fragment and starts summarising it. That is where
 the prose in those columns came from. Input is now capped by
 `PHARMA_EXTRACTOR_MAX_SECTION_CHARS` (default 6000).
@@ -172,7 +172,7 @@ the prose in those columns came from. Input is now capped by
 Answers are now validated: bullets, numbering, wrapping quotes and a leading
 label are normalised into a clean list, while genuine summaries are rejected and
 re-asked up to three times with a correction. If the model never produces a
-list, the cell records `EXTRACTION_FAILED` — an explicit failure you can find
+list, the cell records `EXTRACTION_FAILED`, an explicit failure you can find
 and re-run, instead of prose that looks like data.
 
 Raise the two limits together to feed the model more of each section:
@@ -184,7 +184,7 @@ setx PHARMA_EXTRACTOR_MAX_SECTION_CHARS 20000
 
 **Invented lists.** The worst failure was not prose but a clean list that was
 never in the document. The drug-interactions prompt used to end with a concrete
-example, and the model sometimes returned that example verbatim — thirteen real
+example, and the model sometimes returned that example verbatim: thirteen real
 drug names, perfectly formatted, entirely unrelated to the monograph. Format
 checks cannot catch that, because the shape is correct.
 
@@ -196,7 +196,7 @@ rejected as invented and re-asked.
 Watch the log for `rejected non-list answer`. A few is normal. Many on one
 field means the section finder is feeding that field the wrong text, which is a
 retrieval problem, not a formatting one. A rejection reading `terms appear in
-the source text` means the model invented an answer — usually the sign that the
+the source text` means the model invented an answer, usually the sign that the
 section it was given was empty or irrelevant.
 
 ## 9. Throughput
@@ -205,7 +205,7 @@ One model call at a time, ~14 calls per PDF. To speed the run up:
 
 - **A bigger GPU is the main lever.** Ollama uses it automatically; check with
   `ollama ps` that the model shows `100% GPU` rather than partly CPU.
-- **Split the corpus across machines** by therapeutic class — each run keeps
+- **Split the corpus across machines** by therapeutic class. Each run keeps
   its own checkpoint and Excel, named after the folder you point it at:
 
   ```bat
@@ -217,9 +217,8 @@ One model call at a time, ~14 calls per PDF. To speed the run up:
 
   Merge the per-folder spreadsheets afterwards; the `Source Path`,
   `Drug Folder` and `Therapeutic Class` columns keep provenance.
-- **Try `qwen2.5:7b`** by changing `PHARMA_EXTRACTOR_MODEL` in the .bat — but
-  note the README's finding that Qwen under-catches clinically important
-  adverse events.
+- **Try another model**, such as `qwen2.5:7b` or `llama3.1:8b`, by changing
+  `PHARMA_EXTRACTOR_MODEL` in the .bat.
 
 ## 10. If it goes wrong
 
